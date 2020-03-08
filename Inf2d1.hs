@@ -195,12 +195,6 @@ eval game
 alphabeta:: Role -> Game -> Int
 alphabeta  player game = undefined
 
-ab:: Role -> Game -> Int --alphabeta, for predicted best NEXT move based on brute force probability
-ab  player game
-  | terminal game = eval game
-  | checkWin game (switch player) = switch player
-  | otherwise = ab (switch player) (findBestMove player game)
-
 
 
 -- | OPTIONAL!
@@ -209,7 +203,7 @@ ab  player game
 -- Note, we will only grade this function IF YOUR ALPHABETA FUNCTION IS EMPTY.
 -- The minimax function should return the minimax value of the state (without alphabeta pruning).
 -- The eval function should be used to get the value of a terminal state.
-minimax:: Role -> Game -> Int
+minimax:: Role -> Game -> Int -- predicted best NEXT move based on brute force probability
 minimax player game
   | terminal game = eval game
   | checkWin game (switch player) = switch player
