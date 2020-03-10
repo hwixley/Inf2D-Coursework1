@@ -41,6 +41,8 @@ of the functions which you are asked to implement.
 
 -}
 
+
+
 -- Section 1: Uniform Search
 
 -- The Node type defines the position of the agent on the graph.
@@ -51,6 +53,15 @@ type Graph= [Node]
 
 numNodes::Int
 numNodes = 4
+
+
+
+-- ***** Note to marker!! *****
+-- I orginally thought the input and output branches were represented as adjacency matrices
+-- So instead of rewriting all my functions I created parsers to convert input and output values.
+-- This is why there are supplementary functions in each search algorithm section.
+
+
 
 -- The next function should return all the possible continuations of input search branch through the graph.
 -- Your function should return an empty list if the input search branch is empty.
@@ -280,9 +291,6 @@ parseSAInput (n1:n2:ns)
 
 
 -- A* SEARCH HELPER FUNCTIONS
-
-
-
 
 orderedBranchExpansions:: Branch -> Graph -> [Node] -> [Int] -> [Branch] --Branches expanded appropriately and ordered by their respective costs
 orderedBranchExpansions [] _ _ _ = []
