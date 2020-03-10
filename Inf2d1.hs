@@ -58,16 +58,7 @@ numNodes = 4
 next::Branch -> Graph ->  [Branch]
 next [] _ = []
 next _ [] = []
-next (b:br) (g:gs)
-  | b < g = nub ((g:b:br) : next (b:br) gs)   -- nub function used to eliminate any duplicate branch continuations
-  | b > g = nub ((g:b:br) : next (b:br) gs)   -- nub function used to eliminate any duplicate branch continuations
-  | otherwise = next (b:br) gs
-
-
-next1::Branch -> Graph -> [Branch]
-next1 [] _ = []
-next1 _ [] = []
-next1 branch graph = expandBranches [branch] graph (exploredNodes branch)
+next branch graph = parseOUT ((expandBranches (parseSAInputs [branch] graph)) graph (exploredNodes branch))
 
 
 -- ***Still need to account for whether the given transition is valid or not
@@ -108,15 +99,15 @@ bfs graph destN next branchList exploredList
 depthLimitedSearch::Graph ->Node->(Branch ->Graph-> [Branch])->[Branch]-> Int->[Node]-> Maybe Branch
 depthLimitedSearch [] _ _ _ _ _ = Nothing
 depthLimitedSearch _ _ _ [] _ _ = Nothing
-depthLimitedSearch g destN next branches d exploredList = dfs g destN next (parseSAInputs branches g) d exploredList
+depthLimitedSearch g destN next branches d exploredList = dls g destN next (parseSAInputs branches g) d exploredList
 
 
-dfs::Graph ->Node->(Branch ->Graph-> [Branch])->[Branch]-> Int->[Node]-> Maybe Branch
-dfs [] _ _ _ _ _ = Nothing
-dfs _ _ _ [] _ _ = Nothing
-dfs graph destN next (b:branchList) depth exploredList
+dls::Graph ->Node->(Branch ->Graph-> [Branch])->[Branch]-> Int->[Node]-> Maybe Branch
+dls [] _ _ _ _ _ = Nothing
+dls _ _ _ [] _ _ = Nothing
+dls graph destN next (b:branchList) depth exploredList
   | branchArrived (b:branchList) destN /= Nothing = Just (reverse (tupleToList (flatten (findTransitions (maybeToBranch (branchArrived (b:branchList) destN )))) 0)) --Checks if branch has arrived at destination node
-  | otherwise = dfs graph destN next (ullUpdate (expPoss b graph depth exploredList) (branchList)) depth (nub ((totENodes (b:branchList)) ++ exploredList))
+  | otherwise = dls graph destN next (ullUpdate (expPoss b graph depth exploredList) (branchList)) depth (nub ((totENodes (b:branchList)) ++ exploredList))
 
 
 -- | Section 4: Informed search
@@ -159,14 +150,6 @@ ass g destN next getHr hrTable cost (b:branchList) eNodes
   | branchArrived (b:branchList) destN /= Nothing = Just (reverse (tupleToList (flatten (findTransitions (maybeToBranch (branchArrived (b:branchList) destN)))) 0))
   | orderedBranchExpansions b g eNodes hrTable /= [] = ass g destN next getHr hrTable cost ((orderedBranchExpansions b g eNodes hrTable) ++ (branchList)) eNodes
   | otherwise = ass g destN next getHr hrTable cost branchList eNodes
-
-
---TYPICAL A* ALGORITHM IMPLEMENTATION (returns the overall optimal trace)
-assMinCost::Graph->Node->[Int]->[Branch]->[Node]-> Maybe Branch
-assMinCost [] _ _ _ _ = Nothing
-assMinCost _ _ [] _ _ = Nothing
-assMinCost _ _ _ [] _ = Nothing
-assMinCost g destN hrTable branchList eNodes = Just (cheapestTrace (ass1 g destN hrTable branchList eNodes) (costList (ass1 g destN hrTable branchList eNodes)))
 
 
 
@@ -266,14 +249,15 @@ evalMove player game
 
 
 
-
-
-
 -- BRANCH INPUT & OUTPUT PARSING : I orginally thought the input and output branches were represented as adjacency matrices
 -- So instead of rewriting all my functions I created parsers to convert input and output values.
 -- This is why there are supplementary functions in each search algorithm section.
 
-tupleToList::[(Node,Node)]->Int->[Node] --Parsing correct node list outputs from branch adjacency matrix
+parseOUT::[Branch]->[Branch] --Parses list of branch adjacency matrices into list of node lists.
+parseOUT [] = []
+parseOUT (b:bs) = reverse (tupleToList (flatten (findTransitions b)) 0) : parseOUT bs
+
+tupleToList::[(Node,Node)]->Int->[Node] --Parsing correct node list outputs from branch adjacency matrix. Int input is always 0 to represent first iteration.
 tupleToList [] _ = []
 tupleToList (n:ns) i
   | i == 0 = fst n : snd n : tupleToList ns 1
@@ -297,15 +281,40 @@ parseSAInput (n1:n2:ns)
 
 -- A* SEARCH HELPER FUNCTIONS
 
-cheapestTrace::[Branch]->[Int]->Branch
-cheapestTrace [] _ = []
-cheapestTrace _ [] = []
-cheapestTrace branchList costList = branchList !! maybeToInt (elemIndex (minimum costList) costList)
 
-costList::[Branch]->[Int]
-costList [] = []
-costList (b:bs) = (cost b b) : costList bs
 
+
+orderedBranchExpansions:: Branch -> Graph -> [Node] -> [Int] -> [Branch] --Branches expanded appropriately and ordered by their respective costs
+orderedBranchExpansions [] _ _ _ = []
+orderedBranchExpansions _ [] _ _ = []
+orderedBranchExpansions _ _ _ [] = []
+orderedBranchExpansions branch graph eNodes hrTable
+  | expandBranch branch graph eNodes == [branch] = []
+  | otherwise = orderByCost (expandBranch branch graph eNodes) (totCost (expandBranch branch graph eNodes) hrTable)
+
+orderByCost:: [Branch] -> [Int] -> [Branch] -- orders branches by their cost (front = cheapest, back = most expensive)
+orderByCost [] _ = []
+orderByCost _ [] = []
+orderByCost branchList costList = branchList !! (maybeToInt (elemIndex (minimum costList) costList)) : orderByCost (deleteListEl branchList (maybeToInt (elemIndex (minimum costList) costList))) (deleteListEl costList (maybeToInt (elemIndex (minimum costList) costList)))
+
+deleteListEl:: [a] -> Int -> [a] -- removes a list element at a given index
+deleteListEl [] _ = []
+deleteListEl list index = (take index list) ++ (drop (index+1) list)
+
+totCost:: [Branch] -> [Int] -> [Int] -- returns the list of costs for different node transitions
+totCost [] _ = []
+totCost _ [] = []
+totCost (b:bs) hrTable = (cost b b) + (getHr hrTable (maybeToInt (findBranchEnd b))) : totCost bs hrTable
+
+
+--TYPICAL A* ALGORITHM IMPLEMENTATION (returns the overall optimal trace)
+assMinCost::Graph->Node->[Int]->[Branch]->[Node]-> Maybe Branch
+assMinCost [] _ _ _ _ = Nothing
+assMinCost _ _ [] _ _ = Nothing
+assMinCost _ _ _ [] _ = Nothing
+assMinCost g destN hrTable branchList eNodes = Just (cheapestTrace (ass1 g destN hrTable branchList eNodes) (costList (ass1 g destN hrTable branchList eNodes)))
+
+--TYPICAL A* HELPER FUNCTIONS
 ass1::Graph->Node->[Int]->[Branch]->[Node]-> [Branch]
 ass1 [] _ _ _ _ = []
 ass1 _ _ [] _ _ = []
@@ -315,34 +324,21 @@ ass1 g destN hrTable (b:branchList) eNodes
   | orderedBranchExpansions b g eNodes hrTable /= [] = ass1 g destN hrTable ((orderedBranchExpansions b g eNodes hrTable) ++ (branchList)) eNodes
   | otherwise = ass1 g destN hrTable branchList eNodes
 
+cheapestTrace::[Branch]->[Int]->Branch --Returns cheapest branch from a list of branches
+cheapestTrace [] _ = []
+cheapestTrace _ [] = []
+cheapestTrace branchList costList = branchList !! maybeToInt (elemIndex (minimum costList) costList)
+
+costList::[Branch]->[Int] --Returns a list of respective entire branch costs
+costList [] = []
+costList (b:bs) = (cost b b) : costList bs
+
 agUp::[Branch] -> Branch -> [Branch]
 agUp [] _ = []
 agUp b [] = b
 agUp (b:bs) result
   | (cost b b) + 1 >= (cost result result) = agUp bs result
   | otherwise = b : agUp bs result
-
-orderedBranchExpansions:: Branch -> Graph -> [Node] -> [Int] -> [Branch]
-orderedBranchExpansions [] _ _ _ = []
-orderedBranchExpansions _ [] _ _ = []
-orderedBranchExpansions _ _ _ [] = []
-orderedBranchExpansions branch graph eNodes hrTable
-  | expandBranch branch graph eNodes == [branch] = []
-  | otherwise = orderByCost (expandBranch branch graph eNodes) (totCost (expandBranch branch graph eNodes) hrTable)
-
-orderByCost:: [Branch] -> [Int] -> [Branch]
-orderByCost [] _ = []
-orderByCost _ [] = []
-orderByCost branchList costList = branchList !! (maybeToInt (elemIndex (minimum costList) costList)) : orderByCost (deleteListEl branchList (maybeToInt (elemIndex (minimum costList) costList))) (deleteListEl costList (maybeToInt (elemIndex (minimum costList) costList)))
-
-deleteListEl:: [a] -> Int -> [a] -- removes a list element at a given index
-deleteListEl [] _ = []
-deleteListEl list index = (take index list) ++ (drop (index+1) list)
-
-totCost:: [Branch] -> [Int] -> [Int]
-totCost [] _ = []
-totCost _ [] = []
-totCost (b:bs) hrTable = (cost b b) + (getHr hrTable (maybeToInt (findBranchEnd b))) : totCost bs hrTable
 
 
 
@@ -382,13 +378,13 @@ looping branchList graph nodeList
   | nub (branchList) == nub (expandBranches branchList graph nodeList) = True
   | otherwise = False
 
-branchArrived::[Branch] -> Node -> Maybe Branch
+branchArrived::[Branch] -> Node -> Maybe Branch --If a branch arrived at destN then this branch is returned, otherwise Nothing
 branchArrived [] _ = Nothing
 branchArrived (b:bs) destN
   | arrived b destN = Just b
   | otherwise = branchArrived bs destN
 
-arrived::Branch -> Node -> Bool
+arrived::Branch -> Node -> Bool --Returns a boolean based on whether the input branch has arrived at the input node
 arrived [] _ = False
 arrived branch destination
   | checkArrival destination (maybeToInt (findBranchEnd branch)) = True
@@ -451,7 +447,7 @@ gcf = [-1,-1,-1,-1,1,0,1,0,0,1,0,1,1,0,0,1]
 getNode::Branch->Node --Retrieves first node in a given branch
 getNode (b:bs) = b
 
-totalNodes::Graph -> Int --
+totalNodes::Graph -> Int --Returns total nodes in a given graph
 totalNodes [] = 0
 totalNodes g = round (sqrt (fromIntegral (length g)))
 
@@ -522,7 +518,7 @@ flatten (n:ns) = n ++ flatten ns
 
 --FILL BRANCH WITH VALS
 
-fillBranch::Graph -> Branch
+fillBranch::Graph -> Branch --initializes an empty branch to be filled with transitions
 fillBranch [] = []
 fillBranch (g:gs) = 0 : fillBranch gs
 
